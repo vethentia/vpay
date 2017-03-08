@@ -1,0 +1,3 @@
+com/vethentia/vpay/ChargeStripe.class
+com/vethentia/vpay/ChargePaymentServlet.class
+com/vethentia/vpay/VPayManagerServlet.class

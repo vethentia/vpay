@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+	
+    <head>
+        <title>Vethentia Pay</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<script 
+			src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js">
+		</script>
+		<script 
+			src="paymentservices.js">
+		</script>
+		<script 
+			src="chargeservices.js">
+		</script>
+    </head>
+    <body onload="init">
+		<img src="vethentia_logo.png" alt="HTML5 Icon" style="width:128px;height:140px;">
+		
+		<h1>Vethentia's Test Store</h1>
+		
+		<form id="paymentInfo" name="paymentForm" action="paymentRequest" method="POST">
+			<fieldset>
+				<legend>Payment Authorization Request</legend>
+				<p>
+					<label for="vId">VPay's Id:</label>
+					<input id="vId" type="text" name="vpayId"/>
+				</p>
+				<p>
+					<label for="merchantId">Merchant's Id:</label>
+					<input id="merchantId" type="text" name="merchantId"/>
+				</p>
+				<p>
+					<label for="amount">Purchase amount:</label>
+					<input id="amount" type="text" name="total"/>
+				</p>
+				<p>
+					<label for="shippingAddr">Shipping Address:</label>
+					<input id="shippingAddr" type="text" name="shippingAddr"/>
+				</p>
+				<p>
+					<button id="vpay" 
+							name="VPay" 
+							type="submit">
+						<img src="vpay_button.png" style="width:210px;height:60px;">
+					</button>
+				</p>
+			</fieldset>
+		</form>
+		
+		<p> </p>
+		<div id="paymentAuthorization">
+			<fieldset>
+				<legend>Payment Authorization Response</legend>
+				<div id="pendingAuthorization"></div>
+				<div id="pendingPaymentRsp"></div>
+				<div id="paymentResponse"></div>
+			</fieldset>
+		</div>
+	
+		<p> </p>
+		<div id="paymentCharge">
+			<fieldset>
+				<legend>Charge & Receipt</legend>
+				<div id="chargeSubmitted"> </div>
+				<div id="chargeResult"> </div>
+			</fieldset>
+		</div>
+		
+        <script>
+        $("#paymentInfo").submit(function(event){		
+            event.preventDefault(); //When user submits form, stop it being sent  
+                
+			var merchantName = "MerchantXYZ";
+			var vId = document.forms["paymentForm"]["vId"].value; 
+            var merchantId = document.forms["paymentForm"]["merchantId"].value;
+            var amount = document.forms["paymentForm"]["amount"].value;
+			var countryCode = "US";
+			var currencyCode = "usd";
+            var shippingAddr = document.forms["paymentForm"]["shippingAddr"].value;
+            
+            var para = document.createElement("p");
+            para.textContent = "Waiting for payment authorization response ...";
+			var y = document.getElementById ("pendingPaymentRsp");
+            y.appendChild(para);
+                    
+			// URL of V-Server API for PC/Clous interactions
+			var serverURL = "https://vethentia.azurewebsites.net/api/payments/payrequest";
+			//var serverURL = "http://vethentia.azurewebsites.net/api/payments/payrequest";
+			
+			// Merchant server or e-commerce platform server will generate tid;
+			var today = new Date();
+			var tid = today.getTime().toString();
+			var currentTime = today.toString();
+			
+			// Hard code MAC to start
+			var mac = "123456";  
+			
+			// T1 timeout
+			var t1Interval = 60000; //T1 timeout value is set to 60 seconds.
+			var paymentReqParam = 
+			{
+                "msgId": 1,
+                "tid": tid,
+                "ttime": currentTime,
+                "vid": vId,
+                "shippingInfo": shippingAddr,
+                "amount": amount,
+                "countryCode": countryCode,
+                "currencyCode": currencyCode,
+                "merchantIdentifier": merchantId,
+                "merchantName": merchantName,
+                "lineItems": "1 item;2 item;3 item",
+                //"publicKey": "--publickeyisspecifictoandroidpay--",
+                "messageauthenticationcode": mac  // mac generated merchant server                  
+			};
+			
+			paymentParameters = paymentReqParam;
+			
+			// Store payment request parameters to JSON data variable
+			//alert ("data: " +JSON.stringify(paymentReqParam));
+			
+			$.ajax({
+                type: "POST",
+                url: serverURL,
+                contentType: "application/json",
+                data: JSON.stringify(paymentReqParam),
+                timeout: t1Interval,
+                dataType: "text",
+                async: false,
+                xhrFields: { withCredentials: true },
+                success: function(result){
+					
+                    $("#pendingPaymentRsp").hide();
+                    
+                    var para1 = document.createElement("p");
+					para1.textContent = "Authorization in progress...";
+						
+					var z = document.getElementById ("pendingAuthorization");
+					z.appendChild(para1);  
+					
+                    var checkPaymentRsp = JSON.parse(result);
+					
+					var msgId = checkPaymentRsp.msgId;
+					
+					// Process Code Payment Response
+					if(msgId === 2) {
+						
+					  switch(checkPaymentRsp.status) {
+						case 0 :
+							para1.textContent = "Payment Accepted.";
+							break;
+						case 1:
+							para1.textContent = "Invalid VID/VPayID.";
+							break;
+						case 2 :
+							para1.textContent = "Code Failure.";
+							break;
+						case 3 :
+							para1.textContent = "Invalid Merchant ID or MAC.";
+							break;
+						case 4 :
+							para1.textContent = "User Timeout or Unable to get Token.";
+							break;
+						default:
+							para1.textContent = "Unknown Failure.";
+							break;	
+					  }
+					
+					  if (checkPaymentRsp.status === 0) {
+						  
+					    var token = document.createElement("p");
+                        token.textContent = "Token = " + checkPaymentRsp.token;
+					
+					    var z = document.getElementById ("pendingAuthorization");
+                        z.appendChild(token);
+					
+					    // Prepare the payment CHARGE data
+					    tokenID = checkPaymentRsp.token;
+					    chargeRequest = 
+					    {
+						  "tid": tid,
+						  "vid": vId,
+						  "tokenId": tokenID,
+						  "amount": amount,
+						  "countryCode": countryCode,
+						  "currencyCode": currencyCode,
+						  "merchantIdentifier": merchantId,
+						  "merchantName": merchantName,
+						  "lineItems": "1 item;2 item;3 item"     
+					    };
+					
+					    // Build Charge message
+					    var parax = document.createElement("p");
+					    parax.textContent = "Submitted Charge: " + 
+												JSON.stringify(chargeRequest);
+					    var x = document.getElementById("chargeSubmitted");
+					    x.appendChild(parax);
+					
+					    // Send charge info to payment processor/Stripe
+					    doChargePayment(tokenID, amount);			
+				      } else {
+					    alert ("status: " +checkPaymentRsp.status);
+				      }
+				    } 
+				    // Code Command 
+				    else if (msgId === 5) {
+						
+					  if ((checkPaymentRsp.tid !== "") && (checkPaymentRsp.tid !== tid)){
+						  
+						  // Display the Code 
+						  alert("Code Command on TID: " + tid);
+						  
+						  // Send Code Command Received
+						  doCodeCommand(tid, "123");
+					  }
+				    } else {
+						alert ("Received unknown message: " + msgID);
+					}
+                },
+                error: function(){
+                    $("#pendingPaymentRsp").hide();
+					
+                    var para1 = document.createElement("p");
+                    para1.textContent = "Payment Request/Response Error.";
+					
+					var z = document.getElementById ("pendingAuthorization");
+                    z.appendChild(para1);
+                }
+            });     
+		});
+        </script>
+    </body>
+</html>
